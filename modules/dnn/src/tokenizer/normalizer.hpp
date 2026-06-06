@@ -21,15 +21,6 @@ public:
         rebuildIdentityAlignment();
     }
 
-private:
-    void rebuildIdentityAlignment() {
-        aligment_.clear();
-        aligment_.reserve(normalized_.size());
-        for (std::size_t i{0}; i < (int)normalized_.size(); ++i) {
-            aligment_.push_back(offset{i,i+1});
-        }
-    }
-
     const std::string& orginal() const {
         return org_;
     }
@@ -58,6 +49,14 @@ private:
         return std::nullopt;
     }
 
+private:
+    void rebuildIdentityAlignment() {
+        aligment_.clear();
+        aligment_.reserve(normalized_.size());
+        for (std::size_t i{0}; i < (int)normalized_.size(); ++i) {
+            aligment_.push_back(offset{i,i+1});
+        }
+    }
 
 private:
     std::string org_;
