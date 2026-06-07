@@ -1,3 +1,7 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.	
+
 #ifndef __OPENCV_DNN_TOKENIZER_BPE_HPP__
 #define __OPENCV_DNN_TOKENIZER_BPE_HPP__
 
@@ -22,13 +26,16 @@ using Vocab = std::unordered_map<std::string, std::uint32_t>;
 using RVocab = std::unordered_map<std::uint32_t, std::string>;
 using Merges = std::vector<std::pair<std::string, std::string>>;
 
-struct PairHash {
-    std::size_t operator()(const Pair& p) const {
+struct PairHash 
+{
+    std::size_t operator()(const Pair& p) const 
+    {
         return (static_cast<std::size_t>(p.first) << 32) ^ p.second;
     }
 };
 
-struct Merge {
+struct Merge 
+{
     std::uint32_t rank;
     std::uint32_t newId;
 };
@@ -37,27 +44,33 @@ using MergeMap = std::unordered_map<Pair, Merge, PairHash>;
 
 class BPE;
 
-class BpeBuilder {
+class BpeBuilder 
+{
 public:
     BpeBuilder() =default;
 
     BpeBuilder(Vocab vocab, Merges merges) 
         : vocab_(vocab), merges_(merges) {}
 
-    void vocabAndMerges(Vocab vocab, Merges merges) {
+    void vocabAndMerges(Vocab vocab, Merges merges) 
+    {
         vocab_ = std::move(vocab);
         merges_ = std::move(merges);
     }
-    void files(const std::string& vocab, const std::string& merges) {
+    void files(const std::string& vocab, const std::string& merges) 
+    {
         files_ = std::make_pair(vocab, merges);
     }
-    void setDropout(float dropout) {
+    void setDropout(float dropout) 
+    {
         dropout_ = dropout;
     }
-    void setUnkToken(const std::string& un) {
+    void setUnkToken(const std::string& un) 
+    {
         unk_token_ = un;
     }
-    void setConSubwordPrefix(const std::string& prefix) {
+    void setConSubwordPrefix(const std::string& prefix) 
+    {
         continuing_subword_prefix_ = prefix;
     }
     BPE build();
@@ -74,16 +87,19 @@ private:
     bool byte_fallback_ = false;
 };
 
-class BPE {
+class BPE 
+{
 public:
     BPE() = default;
 
-    explicit BPE(Vocab vo, Merges me)  {
+    explicit BPE(Vocab vo, Merges me)  
+    {
         builder_ = std::make_shared<BpeBuilder>();
         builder_->vocabAndMerges(vo, me);
     }
     
-    BpeBuilder fromFile(const std::string& vocab, const std::string& merges) {
+    BpeBuilder fromFile(const std::string& vocab, const std::string& merges) 
+    {
         if (!builder_)
             builder_ = std::make_shared<BpeBuilder>();
         builder_->files(vocab, merges);
@@ -92,15 +108,18 @@ public:
     // read file with cv::FileStorage 
     static std::pair<Vocab, Merges> readFile(const std::string& vocab, const std::string& mergs);
 
-    Vocab getVocab() const {
+    Vocab getVocab() const 
+    {
         return vocab_;
     }
 
-    std::optional<std::string> getUnkToken() const {
+    std::optional<std::string> getUnkToken() const 
+    {
         return unk_token_;
     }
 
-    std::optional<std::string> getConSubwordPrefix() const {
+    std::optional<std::string> getConSubwordPrefix() const 
+    {
         return continuing_subword_prefix_;
     }
 
@@ -141,14 +160,17 @@ private:
     std::shared_ptr<BpeBuilder> builder_;
 };
 
-inline BPE BpeBuilder::build() {
-    if (dropout_.has_value()) {
+inline BPE BpeBuilder::build() 
+{
+    if (dropout_.has_value()) 
+    {
         float v = dropout_.value();
         if (v > 1.0f || v < 0.0f)
             CV_Error(cv::Error::StsBadArg, "BPE dropout must be in [0, 1].");
     }
 
-    if (files_.has_value()) {
+    if (files_.has_value()) 
+    {
         auto [v, m] = BPE::readFile(files_.value().first, files_.value().second);
         vocab_ = std::move(v);
         merges_ = std::move(m);
@@ -156,7 +178,8 @@ inline BPE BpeBuilder::build() {
 
     RVocab vocab_r;
     vocab_r.reserve(vocab_.size());
-    for (const auto& [token, id] : vocab_) {
+    for (const auto& [token, id] : vocab_) 
+    {
         vocab_r[id] = token;
     }
 
@@ -166,7 +189,8 @@ inline BPE BpeBuilder::build() {
 
     MergeMap merge_map;
     merge_map.reserve(merges_.size());
-    for (std::size_t i = 0; i < merges_.size(); ++i) {
+    for (std::size_t i = 0; i < merges_.size(); ++i) 
+    {
         const auto& [a, b] = merges_[i];
 
         auto ait = vocab_.find(a);
@@ -207,12 +231,17 @@ inline BPE BpeBuilder::build() {
 }
 
 template<typename Iter>
-Merges mergesToMap(Iter begin, Iter end, const Vocab& vocab) {}
+Merges mergesToMap(Iter begin, Iter end, const Vocab& vocab) 
+{
 
-Word BPE::mergeWord(const std::string& w) {
+}
+
+Word BPE::mergeWord(const std::string& w) 
+{
     std::vector<std::size_t> indices;
     std::size_t offset = 0;
-    while (offset < w.size()) {
+    while (offset < w.size()) 
+    {
         indices.push_back(offset);
         std::size_t before = offset;
         unicode_cpt_from_utf8(w, offset);
@@ -222,7 +251,8 @@ Word BPE::mergeWord(const std::string& w) {
     Word word(w.size());
     std::optional<std::pair<std::uint32_t, std::size_t>> unk = std::nullopt;
 
-    for (std::size_t i = 0; i < indices.size(); ++i) {
+    for (std::size_t i = 0; i < indices.size(); ++i) 
+    {
         std::size_t begin = indices[i];
         std::size_t end = (i + 1 < indices.size()) ? indices[i+1] ? w.size();
 
@@ -241,7 +271,6 @@ Word BPE::mergeWord(const std::string& w) {
 }
 
 
-}
-} // namespace cv::dnn
+}} // namespace cv::dnn
 
 #endif // __OPENCV_DNN_TOKENIZER_BPE_HPP__
