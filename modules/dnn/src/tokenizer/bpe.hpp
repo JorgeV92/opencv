@@ -11,6 +11,7 @@
 #include <optional>
 #include <utility>
 
+#include "word.hpp"
 #include "utils.hpp"
 #include "unicode.hpp"
 
@@ -47,24 +48,18 @@ public:
         vocab_ = std::move(vocab);
         merges_ = std::move(merges);
     }
-
     void files(const std::string& vocab, const std::string& merges) {
         files_ = std::make_pair(vocab, merges);
     }
-
     void setDropout(float dropout) {
         dropout_ = dropout;
     }
-
     void setUnkToken(const std::string& un) {
         unk_token_ = un;
     }
-
     void setConSubwordPrefix(const std::string& prefix) {
         continuing_subword_prefix_ = prefix;
     }
-
-
     BPE build();
 
 private:
@@ -94,8 +89,22 @@ public:
         builder_->files(vocab, merges);
         return *builder_;
     }
-
+    // read file with cv::FileStorage 
     static std::pair<Vocab, Merges> readFile(const std::string& vocab, const std::string& mergs);
+
+    Vocab getVocab() const {
+        return vocab_;
+    }
+
+    std::optional<std::string> getUnkToken() const {
+        return unk_token_;
+    }
+
+    std::optional<std::string> getConSubwordPrefix() const {
+        return continuing_subword_prefix_;
+    }
+
+    Word mergeWord(const std::string& w);
 
 private:
     friend class BpeBuilder;
@@ -196,6 +205,41 @@ inline BPE BpeBuilder::build() {
                fuse_unk_,
                byte_fallback_);
 }
+
+template<typename Iter>
+Merges mergesToMap(Iter begin, Iter end, const Vocab& vocab) {}
+
+Word BPE::mergeWord(const std::string& w) {
+    std::vector<std::size_t> indices;
+    std::size_t offset = 0;
+    while (offset < w.size()) {
+        indices.push_back(offset);
+        std::size_t before = offset;
+        unicode_cpt_from_utf8(w, offset);
+        if (offset <= before) offset++;
+    }
+
+    Word word(w.size());
+    std::optional<std::pair<std::uint32_t, std::size_t>> unk = std::nullopt;
+
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+        std::size_t begin = indices[i];
+        std::size_t end = (i + 1 < indices.size()) ? indices[i+1] ? w.size();
+
+        std::string token = w.substr(begin, end - begin);
+
+        if (i > 0 && continuing_subword_prefix_.has_value()) 
+            token = continuing_subword_prefix_.value() + token;
+
+        if (i + 1 == indices.size() && end_of_word_suffix_.has_value())
+            token += end_of_word_suffix_.value();
+
+        // TODO
+    }
+
+    // TODO
+}
+
 
 }
 } // namespace cv::dnn
