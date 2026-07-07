@@ -1,9 +1,34 @@
 // This file is part of OpenCV project.
 // It is subject to the license terms in the LICENSE file found in the top-level directory
-// of this distribution and at http://opencv.org/license.html.	
+// of this distribution and at http://opencv.org/license.html.
 
-#ifndef __OPENCV_DNN_TOKENIZER_BPE_HPP__
-#define __OPENCV_DNN_TOKENIZER_BPE_HPP__
+/**
+ * Initialization:
+    load tokenizer files:
+        vocab.json
+        merges.txt
+        special_tokens_map.json maybe
+        tokenizer_config.json maybe
+        tokenizer.json maybe
+
+    Encoding:
+        raw text
+         normalizer
+         pre-tokenizer
+         BPE / WordPiece / Unigram model using loaded vocab/merges
+         post-processor
+         token IDs
+
+    Decoding:
+        token IDs
+         reverse vocab lookup
+         decoder
+         output text 
+ * 
+ */
+
+#ifndef __OPENCV_DNN_TOKENIZER_MODELS_BPE_BPE_HPP__
+#define __OPENCV_DNN_TOKENIZER_MODELS_BPE_BPE_HPP__
 
 #include <opencv2/dnn/dnn.hpp>
 
@@ -16,31 +41,14 @@
 #include <utility>
 
 #include "word.hpp"
-#include "utils.hpp"
-#include "unicode.hpp"
+#include "../../utils.hpp"
+#include "../../unicode.hpp"
 
 namespace cv { namespace dnn {
 
-using Pair = std::pair<std::uint32_t, std::uint32_t>;
 using Vocab = std::unordered_map<std::string, std::uint32_t>;
 using RVocab = std::unordered_map<std::uint32_t, std::string>;
 using Merges = std::vector<std::pair<std::string, std::string>>;
-
-struct PairHash 
-{
-    std::size_t operator()(const Pair& p) const 
-    {
-        return (static_cast<std::size_t>(p.first) << 32) ^ p.second;
-    }
-};
-
-struct Merge 
-{
-    std::uint32_t rank;
-    std::uint32_t newId;
-};
-
-using MergeMap = std::unordered_map<Pair, Merge, PairHash>;
 
 class BPE;
 
@@ -215,7 +223,7 @@ inline BPE BpeBuilder::build()
 
         merge_map.emplace(
             Pair{ait->second, bit->second},
-            Merge{static_cast<std::uint32_t>(i), nit->second}
+            MergeRule{static_cast<std::uint32_t>(i), nit->second}
         );
     }
 
@@ -254,7 +262,7 @@ Word BPE::mergeWord(const std::string& w)
     for (std::size_t i = 0; i < indices.size(); ++i) 
     {
         std::size_t begin = indices[i];
-        std::size_t end = (i + 1 < indices.size()) ? indices[i+1] ? w.size();
+        std::size_t end = (i + 1 < indices.size()) ? indices[i+1] : w.size();
 
         std::string token = w.substr(begin, end - begin);
 
@@ -273,4 +281,4 @@ Word BPE::mergeWord(const std::string& w)
 
 }} // namespace cv::dnn
 
-#endif // __OPENCV_DNN_TOKENIZER_BPE_HPP__
+#endif // __OPENCV_DNN_TOKENIZER_MODELS_BPE_BPE_HPP__

@@ -22,6 +22,8 @@ bin/
 *.log
 *.tlog
 build
+build-tokenizer
+build-tokenizer-full
 node_modules
 CMakeSettings.json
 xcuserdata/

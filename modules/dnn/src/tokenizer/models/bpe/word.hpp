@@ -2,8 +2,8 @@
 // It is subject to the license terms in the LICENSE file found in the top-level directory
 // of this distribution and at http://opencv.org/license.html.
 
-#ifndef __OPENCV_DNN_TOKENIZER_WORD_HPP__
-#define __OPENCV_DNN_TOKENIZER_WORD_HPP__
+#ifndef __OPENCV_DNN_TOKENIZER_MODELS_BPE_WORD_HPP__
+#define __OPENCV_DNN_TOKENIZER_MODELS_BPE_WORD_HPP__
 
 #include <algorithm>
 #include <cstddef>
@@ -11,14 +11,29 @@
 #include <optional>
 #include <queue>
 #include <random>
-#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "bpe.hpp"
-
 namespace cv { namespace dnn {
+
+using Pair = std::pair<std::uint32_t, std::uint32_t>;
+
+struct PairHash
+{
+    std::size_t operator()(const Pair& p) const
+    {
+        return (static_cast<std::size_t>(p.first) << 32) ^ p.second;
+    }
+};
+
+struct MergeRule
+{
+    std::uint32_t rank;
+    std::uint32_t newId;
+};
+
+using MergeMap = std::unordered_map<Pair, MergeRule, PairHash>;
 
 struct MergeCandidate
 {
@@ -64,7 +79,7 @@ public:
 
     void mergeAll(const MergeMap& merges, std::optional<float> dropout);
 
-    std::vector<std::pair<Pair, std::uint32_t>>
+    std::vector<std::pair<Pair, std::int32_t>>
     merge(std::uint32_t c1, std::uint32_t c2, std::uint32_t replacement, std::size_t maxLength);
 
 private:
@@ -139,7 +154,7 @@ Word::merge(
 
                 if (symbols_[i+1].len + nS.len < maxLength)
                 {
-                    changes.emplace_back(Pair{replacement, symbols_[i+1].c}, -1);
+                    changes.emplace_back(Pair{replacement, symbols_[i+1].c}, 1);
                 }
             }
         }
@@ -151,10 +166,7 @@ Word::merge(
 
 inline void Word::mergeAll(const MergeMap& merges, std::optional<float> dropout)
 {
-    if (dropout && (*dropout < 0.0f || *dropout > 1.0f))
-        throw std::invalid_argument("error");
-
-        using Queue = std::priority_queue<MergeCandidate, std::vector<MergeCandidate>, MergeCandidateComp>;
+    using Queue = std::priority_queue<MergeCandidate, std::vector<MergeCandidate>, MergeCandidateComp>;
 
         Queue queue;
 
@@ -250,8 +262,8 @@ inline void Word::mergeAll(const MergeMap& merges, std::optional<float> dropout)
                 if (followingPos < symbols_.size()) 
                 {
                     const Pair newRightPair{left.c, symbols_[followingPos].c};
-                    const auto rule = megres.find(newRightPair);
-                    if (rule != megres.end()) 
+                    const auto rule = merges.find(newRightPair);
+                    if (rule != merges.end())
                     {
                         queue.push(MergeCandidate{
                             .pos = top.pos,
@@ -264,13 +276,13 @@ inline void Word::mergeAll(const MergeMap& merges, std::optional<float> dropout)
 
         }
 
-        std::erase_if(
-            symbols_,
-            [](const Symbol& sym) 
-            {
-                return sym.len == 0;
-            }
-        );
+        symbols_.erase(
+            std::remove_if(symbols_.begin(), symbols_.end(),
+                [](const Symbol& sym)
+                {
+                    return sym.len == 0;
+                }),
+            symbols_.end());
 
         for (std::size_t i = 0; i < symbols_.size(); ++i) 
         {
@@ -288,4 +300,4 @@ inline void Word::mergeAll(const MergeMap& merges, std::optional<float> dropout)
 
 }} // namespace cv::dnn
 
-#endif // __OPENCV_DNN_TOKENIZER_WORD_HPP__
+#endif // __OPENCV_DNN_TOKENIZER_MODELS_BPE_WORD_HPP__
