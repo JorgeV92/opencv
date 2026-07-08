@@ -80,7 +80,38 @@ public:
     void mergeAll(const MergeMap& merges, std::optional<float> dropout);
 
     std::vector<std::pair<Pair, std::int32_t>>
-    merge(std::uint32_t c1, std::uint32_t c2, std::uint32_t replacement, std::size_t maxLength);
+    merge(std::uint32_t c1, std::uint32_t c2, std::uint32_t replacement, std::size_t maxLength); 
+
+    std::vector<std::uint32_t> get_chars() const
+    {
+        std::vector<std::uint32_t> chars;
+        chars.reserve(symbols_.size());
+        for (const auto& sy : symbols_) 
+        {
+            chars.push_back(sy.c);
+        }
+        return chars;
+    }
+
+    std::vector<std::uint32_t> get_chars_iter() const
+    {
+        return get_chars();
+    }
+
+    std::vector<std::pair<std::size_t, std::size_t>> get_offsets_iter() const
+    {
+        std::vector<std::pair<std::size_t, std::size_t>> offsets;
+        offsets.reserve(symbols_.size());
+
+        std::size_t pos = 0;
+        for (const auto& sy : symbols_) 
+        {
+            std::size_t new_pos = pos + sy.len;
+            offsets.push_back({pos, new_pos});
+            pos = new_pos;
+        }
+        return offsets;
+    }
 
 private:
     std::vector<Symbol> symbols_;
