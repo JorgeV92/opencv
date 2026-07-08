@@ -7,6 +7,9 @@
 
 #include "../../unicode.hpp"
 
+#include <fstream>
+#include <limits>
+
 namespace cv { namespace dnn {
 
 BpeBuilder::BpeBuilder(Vocab vocab, Merges merges)
@@ -129,9 +132,70 @@ BPE::BPE(Vocab vocab,
 {
 }
 
-std::pair<Vocab, Merges> BPE::readFile(const std::string&, const std::string&)
+std::pair<Vocab, Merges> BPE::readFile(const std::string& vocabPath,
+                                       const std::string& mergesPath)
 {
-    CV_Error(cv::Error::StsNotImplemented, "BPE vocabulary and merges file loading is not implemented.");
+    FileStorage storage(vocabPath, FileStorage::READ | FileStorage::FORMAT_JSON);
+    if (!storage.isOpened())
+        CV_Error(Error::StsError, "Failed to open BPE vocabulary: " + vocabPath);
+
+    const FileNode root = storage.root();
+    if (!root.isMap())
+        CV_Error(Error::StsParseError, "BPE vocabulary must be a JSON object: " + vocabPath);
+
+    Vocab vocab;
+    for (FileNodeIterator it = root.begin(); it != root.end(); ++it)
+    {
+        const FileNode entry = *it;
+        if (!entry.isInt())
+        {
+            if (entry.isReal())
+                CV_Error(Error::StsParseError,
+                         "BPE vocabulary ID must be an unsigned integer for token: " + entry.name());
+            continue;
+        }
+
+        const int id = static_cast<int>(entry);
+        if (id < 0 || static_cast<std::uint64_t>(id) > std::numeric_limits<std::uint32_t>::max())
+            CV_Error(Error::StsOutOfRange,
+                     "BPE vocabulary ID is outside uint32 range for token: " + entry.name());
+
+        vocab.emplace(entry.name(), static_cast<std::uint32_t>(id));
+    }
+    storage.release();
+
+    std::ifstream mergeFile(mergesPath);
+    if (!mergeFile.is_open())
+        CV_Error(Error::StsError, "Failed to open BPE merges: " + mergesPath);
+
+    Merges merges;
+    std::string line;
+    std::size_t mergeLine = 0;
+    while (std::getline(mergeFile, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.compare(0, 8, "#version") == 0)
+            continue;
+
+        ++mergeLine;
+        const std::size_t separator = line.find(' ');
+        if (separator == std::string::npos ||
+            separator == 0 ||
+            separator + 1 >= line.size() ||
+            line.find(' ', separator + 1) != std::string::npos)
+        {
+            CV_Error(Error::StsParseError,
+                     "Invalid BPE merge at merge line " + std::to_string(mergeLine));
+        }
+
+        merges.emplace_back(line.substr(0, separator), line.substr(separator + 1));
+    }
+
+    if (mergeFile.bad())
+        CV_Error(Error::StsError, "Failed while reading BPE merges: " + mergesPath);
+
+    return std::make_pair(std::move(vocab), std::move(merges));
 }
 
 BpeBuilder BPE::fromFile(const std::string& vocab, const std::string& merges)
