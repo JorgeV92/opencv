@@ -226,6 +226,27 @@ Vocab BPE::getVocab() const
     return vocab_;
 }
 
+std::size_t BPE::getVocabSize() const
+{
+    return vocab_.size();
+}
+
+std::optional<std::uint32_t> BPE::tokenToId(const std::string& token) const
+{
+    const auto it = vocab_.find(token);
+    if (it == vocab_.end())
+        return std::nullopt;
+    return it->second;
+}
+
+std::optional<std::string> BPE::idToToken(std::uint32_t id) const
+{
+    const auto it = rev_vocab_.find(id);
+    if (it == rev_vocab_.end())
+        return std::nullopt;
+    return it->second;
+}
+
 std::optional<std::string> BPE::getUnkToken() const
 {
     return unk_token_;
@@ -236,7 +257,39 @@ std::optional<std::string> BPE::getConSubwordPrefix() const
     return continuing_subword_prefix_;
 }
 
-Word BPE::mergeWord(const std::string& wordValue)
+std::vector<Token> BPE::tokenize(const std::string& sequence) const
+{
+    if (sequence.empty())
+        return {};
+
+    return wordToTokens(mergeWord(sequence));
+}
+
+std::vector<Token> BPE::wordToTokens(const Word& word) const
+{
+    const std::vector<std::uint32_t> ids = word.get_chars_iter();
+    const std::vector<std::pair<std::size_t, std::size_t>> offsets =
+            word.get_offsets_iter();
+
+    if (ids.size() != offsets.size())
+        CV_Error(Error::StsInternal, "BPE token IDs and offsets have different sizes.");
+
+    std::vector<Token> tokens;
+    tokens.reserve(ids.size());
+    for (std::size_t i = 0; i < ids.size(); ++i)
+    {
+        const auto valueIt = rev_vocab_.find(ids[i]);
+        if (valueIt == rev_vocab_.end())
+            CV_Error(Error::StsInternal,
+                     "BPE token ID is missing from reverse vocabulary: " +
+                     std::to_string(ids[i]));
+
+        tokens.emplace_back(ids[i], valueIt->second, offsets[i]);
+    }
+    return tokens;
+}
+
+Word BPE::mergeWord(const std::string& wordValue) const
 {
     std::vector<std::size_t> indices;
     std::size_t offset = 0;

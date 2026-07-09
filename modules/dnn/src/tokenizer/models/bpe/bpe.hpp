@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "word.hpp"
+#include "../model.hpp"
 
 namespace cv { namespace dnn {
 
@@ -76,7 +77,7 @@ private:
     bool byte_fallback_ = false;
 };
 
-class CV_EXPORTS BPE
+class CV_EXPORTS BPE final : public TokenizerModel
 {
 public:
     BPE() = default;
@@ -87,11 +88,14 @@ public:
     // read file with cv::FileStorage 
     static std::pair<Vocab, Merges> readFile(const std::string& vocab, const std::string& mergs);
 
-    Vocab getVocab() const;
+    std::vector<Token> tokenize(const std::string& sequence) const override;
+    std::optional<std::uint32_t> tokenToId(const std::string& token) const override;
+    std::optional<std::string> idToToken(std::uint32_t id) const override;
+    Vocab getVocab() const override;
+    std::size_t getVocabSize() const override;
+
     std::optional<std::string> getUnkToken() const;
     std::optional<std::string> getConSubwordPrefix() const;
-
-    Word mergeWord(const std::string& w);
 
 private:
     friend class BpeBuilder;
@@ -105,6 +109,9 @@ private:
         std::optional<std::string> end_of_word_suffix,
         bool fuse_unk,
         bool byte_fallback);
+
+    Word mergeWord(const std::string& word) const;
+    std::vector<Token> wordToTokens(const Word& word) const;
 
     Vocab vocab_;
     RVocab rev_vocab_;

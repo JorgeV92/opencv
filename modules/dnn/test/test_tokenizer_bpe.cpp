@@ -50,11 +50,12 @@ TEST(Tokenizer_BPE_Model, MergeWord)
     BpeBuilder builder(Vocab{{"a", 0}, {"b", 1}, {"ab", 2}}, Merges{{"a", "b"}});
     BPE model = builder.build();
 
-    const cv::dnn::Word word = model.mergeWord("ab");
+    const std::vector<cv::dnn::Token> tokens = model.tokenize("ab");
 
-    EXPECT_EQ((std::vector<std::uint32_t>{2}), word.get_chars());
-    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 2}}),
-              word.get_offsets_iter());
+    ASSERT_EQ(1u, tokens.size());
+    EXPECT_EQ(2u, tokens[0].id);
+    EXPECT_EQ("ab", tokens[0].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{0, 2}), tokens[0].offsets);
 }
 
 TEST(Tokenizer_BPE_Model, MergeWordPrefixAndSuffix)
@@ -64,11 +65,15 @@ TEST(Tokenizer_BPE_Model, MergeWordPrefixAndSuffix)
     builder.setEndOfWordSuffix("</w>");
     BPE model = builder.build();
 
-    const cv::dnn::Word word = model.mergeWord("ab");
+    const std::vector<cv::dnn::Token> tokens = model.tokenize("ab");
 
-    EXPECT_EQ((std::vector<std::uint32_t>{0, 1}), word.get_chars());
-    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}}),
-              word.get_offsets_iter());
+    ASSERT_EQ(2u, tokens.size());
+    EXPECT_EQ(0u, tokens[0].id);
+    EXPECT_EQ("a", tokens[0].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{0, 1}), tokens[0].offsets);
+    EXPECT_EQ(1u, tokens[1].id);
+    EXPECT_EQ("##b</w>", tokens[1].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{1, 2}), tokens[1].offsets);
 }
 
 TEST(Tokenizer_BPE_Model, MergeWordFusedUnknowns)
@@ -78,11 +83,16 @@ TEST(Tokenizer_BPE_Model, MergeWordFusedUnknowns)
     builder.setFuseUnk(true);
     BPE model = builder.build();
 
-    const cv::dnn::Word word = model.mergeWord("xxa?");
+    const std::vector<cv::dnn::Token> tokens = model.tokenize("xxa?");
 
-    EXPECT_EQ((std::vector<std::uint32_t>{1, 0, 1}), word.get_chars());
-    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 2}, {2, 3}, {3, 4}}),
-              word.get_offsets_iter());
+    ASSERT_EQ(3u, tokens.size());
+    EXPECT_EQ(1u, tokens[0].id);
+    EXPECT_EQ("[UNK]", tokens[0].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{0, 2}), tokens[0].offsets);
+    EXPECT_EQ(0u, tokens[1].id);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{2, 3}), tokens[1].offsets);
+    EXPECT_EQ(1u, tokens[2].id);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{3, 4}), tokens[2].offsets);
 }
 
 TEST(Tokenizer_BPE_Model, MergeWordByteFallback)
@@ -91,11 +101,15 @@ TEST(Tokenizer_BPE_Model, MergeWordByteFallback)
     builder.setByteFallback(true);
     BPE model = builder.build();
 
-    const cv::dnn::Word word = model.mergeWord("\xC3\xA9");
+    const std::vector<cv::dnn::Token> tokens = model.tokenize("\xC3\xA9");
 
-    EXPECT_EQ((std::vector<std::uint32_t>{0, 1}), word.get_chars());
-    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}}),
-              word.get_offsets_iter());
+    ASSERT_EQ(2u, tokens.size());
+    EXPECT_EQ(0u, tokens[0].id);
+    EXPECT_EQ("<0xC3>", tokens[0].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{0, 1}), tokens[0].offsets);
+    EXPECT_EQ(1u, tokens[1].id);
+    EXPECT_EQ("<0xA9>", tokens[1].value);
+    EXPECT_EQ((std::pair<std::size_t, std::size_t>{1, 2}), tokens[1].offsets);
 }
 
 TEST(Tokenizer_BPE_Model, MergeWordRejectsMissingUnknownToken)
@@ -104,7 +118,21 @@ TEST(Tokenizer_BPE_Model, MergeWordRejectsMissingUnknownToken)
     builder.setUnkToken("[UNK]");
     BPE model = builder.build();
 
-    EXPECT_THROW(model.mergeWord("?"), cv::Exception);
+    EXPECT_THROW(model.tokenize("?"), cv::Exception);
+}
+
+TEST(Tokenizer_BPE_Model, VocabularyLookup)
+{
+    BpeBuilder builder(Vocab{{"a", 7}}, Merges{});
+    BPE model = builder.build();
+
+    ASSERT_TRUE(model.tokenToId("a").has_value());
+    EXPECT_EQ(7u, model.tokenToId("a").value());
+    EXPECT_FALSE(model.tokenToId("missing").has_value());
+    ASSERT_TRUE(model.idToToken(7).has_value());
+    EXPECT_EQ("a", model.idToToken(7).value());
+    EXPECT_FALSE(model.idToToken(9).has_value());
+    EXPECT_EQ(1u, model.getVocabSize());
 }
 
 }} // namespace
