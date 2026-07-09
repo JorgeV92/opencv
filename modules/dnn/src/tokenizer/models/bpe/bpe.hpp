@@ -59,6 +59,9 @@ public:
     void setDropout(float dropout);
     void setUnkToken(const std::string& un);
     void setConSubwordPrefix(const std::string& prefix);
+    void setEndOfWordSuffix(const std::string& suffix);
+    void setFuseUnk(bool fuseUnk);
+    void setByteFallback(bool byteFallback);
     BPE build();
 
 private:
@@ -115,12 +118,6 @@ private:
 
     std::shared_ptr<BpeBuilder> builder_;
 };
-
-template<typename Iter>
-Merges mergesToMap(Iter begin, Iter end, const Vocab& vocab) 
-{
-
-}
 
 }} // namespace cv::dnn
 

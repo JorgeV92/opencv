@@ -43,6 +43,21 @@ void BpeBuilder::setConSubwordPrefix(const std::string& prefix)
     continuing_subword_prefix_ = prefix;
 }
 
+void BpeBuilder::setEndOfWordSuffix(const std::string& suffix)
+{
+    end_of_word_suffix_ = suffix;
+}
+
+void BpeBuilder::setFuseUnk(bool fuseUnk)
+{
+    fuse_unk_ = fuseUnk;
+}
+
+void BpeBuilder::setByteFallback(bool byteFallback)
+{
+    byte_fallback_ = byteFallback;
+}
+
 BPE BpeBuilder::build()
 {
     if (dropout_.has_value())
@@ -235,12 +250,14 @@ Word BPE::mergeWord(const std::string& wordValue)
     }
 
     Word word(static_cast<int>(wordValue.size()));
+    std::optional<std::pair<std::uint32_t, std::size_t>> pendingUnk;
 
     for (std::size_t i = 0; i < indices.size(); ++i)
     {
         const std::size_t begin = indices[i];
         const std::size_t end = i + 1 < indices.size() ? indices[i + 1] : wordValue.size();
         std::string token = wordValue.substr(begin, end - begin);
+        const std::size_t byteLength = token.size();
 
         if (i > 0 && continuing_subword_prefix_.has_value())
             token = continuing_subword_prefix_.value() + token;
@@ -248,10 +265,67 @@ Word BPE::mergeWord(const std::string& wordValue)
         if (i + 1 == indices.size() && end_of_word_suffix_.has_value())
             token += end_of_word_suffix_.value();
 
-        // TODO: map token IDs and unknown-token behavior.
+        const auto tokenIt = vocab_.find(token);
+        if (tokenIt != vocab_.end())
+        {
+            if (pendingUnk.has_value())
+            {
+                word.add(pendingUnk->first, pendingUnk->second);
+                pendingUnk.reset();
+            }
+            word.add(tokenIt->second, byteLength);
+            continue;
+        }
+
+        if (byte_fallback_)
+        {
+            std::vector<std::uint32_t> byteTokenIds;
+            byteTokenIds.reserve(token.size());
+            bool foundAllBytes = true;
+            for (const unsigned char byte : token)
+            {
+                const std::string byteToken = cv::format("<0x%02X>", byte);
+                const auto byteIt = vocab_.find(byteToken);
+                if (byteIt == vocab_.end())
+                {
+                    foundAllBytes = false;
+                    break;
+                }
+                byteTokenIds.push_back(byteIt->second);
+            }
+
+            if (foundAllBytes)
+            {
+                for (const std::uint32_t id : byteTokenIds)
+                    word.add(id, 1);
+                continue;
+            }
+        }
+
+        if (!unk_token_.has_value())
+            continue;
+
+        const auto unkIt = vocab_.find(unk_token_.value());
+        if (unkIt == vocab_.end())
+            CV_Error(Error::StsBadArg,
+                     "BPE unknown token is not in the vocabulary: " + unk_token_.value());
+
+        if (pendingUnk.has_value() && fuse_unk_)
+        {
+            pendingUnk->second += byteLength;
+        }
+        else
+        {
+            if (pendingUnk.has_value())
+                word.add(pendingUnk->first, pendingUnk->second);
+            pendingUnk = std::make_pair(unkIt->second, byteLength);
+        }
     }
 
-    // TODO: apply merge_map_ after token IDs have been added.
+    if (pendingUnk.has_value())
+        word.add(pendingUnk->first, pendingUnk->second);
+
+    word.mergeAll(merge_map_, dropout_);
     return word;
 }
 

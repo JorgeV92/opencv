@@ -10,7 +10,12 @@
 
 namespace opencv_test { namespace {
 
-TEST(Tokenizer_BPE, ReadFile)
+using cv::dnn::BPE;
+using cv::dnn::BpeBuilder;
+using cv::dnn::Merges;
+using cv::dnn::Vocab;
+
+TEST(Tokenizer_BPE_Model, ReadFile)
 {
     const std::string vocabPath = cv::tempfile(".json");
     const std::string mergesPath = cv::tempfile(".txt");
@@ -38,6 +43,68 @@ TEST(Tokenizer_BPE, ReadFile)
 
     EXPECT_EQ(0, std::remove(vocabPath.c_str()));
     EXPECT_EQ(0, std::remove(mergesPath.c_str()));
+}
+
+TEST(Tokenizer_BPE_Model, MergeWord)
+{
+    BpeBuilder builder(Vocab{{"a", 0}, {"b", 1}, {"ab", 2}}, Merges{{"a", "b"}});
+    BPE model = builder.build();
+
+    const cv::dnn::Word word = model.mergeWord("ab");
+
+    EXPECT_EQ((std::vector<std::uint32_t>{2}), word.get_chars());
+    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 2}}),
+              word.get_offsets_iter());
+}
+
+TEST(Tokenizer_BPE_Model, MergeWordPrefixAndSuffix)
+{
+    BpeBuilder builder(Vocab{{"a", 0}, {"##b</w>", 1}}, Merges{});
+    builder.setConSubwordPrefix("##");
+    builder.setEndOfWordSuffix("</w>");
+    BPE model = builder.build();
+
+    const cv::dnn::Word word = model.mergeWord("ab");
+
+    EXPECT_EQ((std::vector<std::uint32_t>{0, 1}), word.get_chars());
+    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}}),
+              word.get_offsets_iter());
+}
+
+TEST(Tokenizer_BPE_Model, MergeWordFusedUnknowns)
+{
+    BpeBuilder builder(Vocab{{"a", 0}, {"[UNK]", 1}}, Merges{});
+    builder.setUnkToken("[UNK]");
+    builder.setFuseUnk(true);
+    BPE model = builder.build();
+
+    const cv::dnn::Word word = model.mergeWord("xxa?");
+
+    EXPECT_EQ((std::vector<std::uint32_t>{1, 0, 1}), word.get_chars());
+    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 2}, {2, 3}, {3, 4}}),
+              word.get_offsets_iter());
+}
+
+TEST(Tokenizer_BPE_Model, MergeWordByteFallback)
+{
+    BpeBuilder builder(Vocab{{"<0xC3>", 0}, {"<0xA9>", 1}}, Merges{});
+    builder.setByteFallback(true);
+    BPE model = builder.build();
+
+    const cv::dnn::Word word = model.mergeWord("\xC3\xA9");
+
+    EXPECT_EQ((std::vector<std::uint32_t>{0, 1}), word.get_chars());
+    EXPECT_EQ((std::vector<std::pair<std::size_t, std::size_t>>{{0, 1}, {1, 2}}),
+              word.get_offsets_iter());
+}
+
+TEST(Tokenizer_BPE_Model, MergeWordRejectsMissingUnknownToken)
+{
+    BpeBuilder builder(Vocab{}, Merges{});
+    builder.setUnkToken("[UNK]");
+    BPE model = builder.build();
+
+    EXPECT_THROW(model.mergeWord("?"), cv::Exception);
 }
 
 }} // namespace
